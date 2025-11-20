@@ -1,0 +1,29 @@
+{
+  "name": "techscope-be",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/app.ts",
+    "build": "tsc",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write .",
+    "start": "node dist/lambda.js"
+  },
+  "dependencies": {
+    "@fastify/aws-lambda": "^6.1.1",
+    "@fastify/cors": "^8.4.0",
+    "fastify": "^4.26.2"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.122",
+    "@types/node": "^20.10.0",
+    "cspell": "^8.0.0",
+    "eslint": "^8.54.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.0",
+    "eslint-plugin-simple-import-sort": "^10.0.0",
+    "prettier": "^3.1.0",
+    "tsx": "^4.6.2",
+    "typescript": "^5.3.0"
+  }
+}
