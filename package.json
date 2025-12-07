@@ -10,9 +10,15 @@
     "start": "node dist/lambda.js"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.939.0",
+    "@aws-sdk/util-dynamodb": "^3.939.0",
     "@fastify/aws-lambda": "^6.1.1",
     "@fastify/cors": "^8.4.0",
-    "fastify": "^4.26.2"
+    "fastify": "^4.26.2",
+    "json-schema-to-ts": "^3.1.1",
+    "lib-dynamodb": "github:aws-sdk/lib-dynamodb",
+    "rss-parser": "^3.13.0",
+    "zod": "^4.1.13"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.122",
