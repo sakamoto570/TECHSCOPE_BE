@@ -5,7 +5,7 @@ import swaggerUi from '@fastify/swagger-ui'
 
 import newsRoutes from './routes/newsRoutes'
 import quizRoutes from './routes/quizRoutes'
-import memoRoutes from './routes/memoRoutes'
+// import memoRoutes from './routes/memoRoutes'
 
 const app = Fastify()
 
@@ -32,6 +32,6 @@ app.register(swaggerUi, {
 // Routes
 app.register(newsRoutes, { prefix: '/news' })
 app.register(quizRoutes, { prefix: '/news' }) // nested
-app.register(memoRoutes, { prefix: '/news' })
+// app.register(memoRoutes, { prefix: '/news' })
 
 export default app
