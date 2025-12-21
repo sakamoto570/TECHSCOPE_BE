@@ -7,6 +7,7 @@ import * as integrations from '@aws-cdk/aws-apigatewayv2-integrations-alpha'
 import * as events from 'aws-cdk-lib/aws-events'
 import * as targets from 'aws-cdk-lib/aws-events-targets'
 import * as path from 'path'
+import { PolicyStatement } from 'aws-cdk-lib/aws-iam'
 
 export class TechscopeBeStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -38,12 +39,24 @@ export class TechscopeBeStack extends cdk.Stack {
       entry: path.join(__dirname, '../../src/lambda/fetchRss.ts'),
       handler: 'handler',
       runtime: cdk.aws_lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(600),
       environment: {
         TABLE_NAME: techscopeTable.tableName,
       },
     })
 
     techscopeTable.grantReadWriteData(fetchRssLambda)
+
+    fetchRssLambda.addToRolePolicy(
+      new PolicyStatement({
+        actions: [
+          'bedrock:InvokeModel',
+          'aws-marketplace:ViewSubscriptions',
+          'aws-marketplace:Subscribe',
+        ],
+        resources: ['*'],
+      })
+    )
 
     // 毎日 9:00 に実行する EventBridge Rule
     const rule = new events.Rule(this, 'DailyNewsFetcherRule', {
