@@ -4,7 +4,7 @@ import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
 
 import newsRoutes from './routes/newsRoutes'
-import quizRoutes from './routes/quizRoutes'
+import { quizRoutes } from './routes/quizRoutes'
 // import memoRoutes from './routes/memoRoutes'
 
 const app = Fastify()

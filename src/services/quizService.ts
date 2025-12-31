@@ -1,48 +1,99 @@
-// services/quizzes.ts
-import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb'
+// services/quizService.ts
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
+import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb'
 
-const dynamo = new DynamoDBClient({})
+const client = new DynamoDBClient({})
+const dynamo = DynamoDBDocumentClient.from(client)
 
-export const getAllQuizzes = async () => {
+type QuizMetaItem = {
+  PK: string
+  SK: 'META'
+  title: string
+  link: string
+  publishedAt: string
+}
+
+type QuizQuestionItem = {
+  PK: string
+  SK: string // 'Q#1' とか
+  question: string
+  choices: string // JSON文字列前提（["A","B",...]）
+  answerIndex: number
+  rationale: string
+  difficulty: string
+  content: string
+}
+
+type Quiz = {
+  id: string
+  title: string
+  url: string
+  publishedAt: string
+  question: string
+  choices: string[]
+  answerIndex: number
+  rationale: string
+  difficulty: string
+  content: string
+}
+
+export const getAllQuizzes = async (): Promise<Quiz[]> => {
   const response = await dynamo.send(
     new ScanCommand({
       TableName: process.env.TABLE_NAME!,
-      FilterExpression: 'begins_with(PK, :quiz)',
+      // PK が "QUIZ#" で始まるレコードだけ拾う
+      FilterExpression: 'begins_with(#pk, :quiz)',
+      ExpressionAttributeNames: {
+        '#pk': 'PK',
+      },
       ExpressionAttributeValues: {
-        ':quiz': { S: 'QUIZ#' },
+        ':quiz': 'QUIZ#',
       },
     })
   )
 
   const items = response.Items ?? []
-  const grouped: Record<string, any> = {}
+  const grouped: Record<string, Partial<Quiz>> = {}
 
-  for (const item of items) {
-    const pk = item.PK.S!
-    const sk = item.SK.S!
+  for (const raw of items) {
+    const item = raw as any
+    const pk = item.PK as string
+    const sk = item.SK as string
 
     if (!grouped[pk]) grouped[pk] = {}
 
     if (sk === 'META') {
-      grouped[pk].title = item.title.S
-      grouped[pk].url = item.link.S
-      grouped[pk].publishedAt = item.publishedAt.S
+      const meta = item as QuizMetaItem
+      grouped[pk].title = meta.title
+      grouped[pk].url = meta.link
+      grouped[pk].publishedAt = meta.publishedAt
     } else if (sk === 'Q#1') {
-      grouped[pk].question = item.question.S
-      grouped[pk].choices = JSON.parse(item.choices.S!)
-      grouped[pk].answerIndex = Number(item.answerIndex.N)
-      grouped[pk].rationale = item.rationale.S
-      grouped[pk].difficulty = item.difficulty.S
-      grouped[pk].content = item.content.S
+      const q = item as QuizQuestionItem
+      grouped[pk].question = q.question
+      grouped[pk].choices = JSON.parse(q.choices) // ← JSON文字列前提
+      grouped[pk].answerIndex = Number(q.answerIndex)
+      grouped[pk].rationale = q.rationale
+      grouped[pk].difficulty = q.difficulty
+      grouped[pk].content = q.content
     }
   }
 
-  const quizzes = Object.entries(grouped)
+  const quizzes: Quiz[] = Object.entries(grouped)
+    // META + Q#1 両方そろってるやつだけ残す
     .filter(([_, q]) => q.title && q.question)
     .map(([id, q]) => ({
       id,
-      ...q,
+      title: q.title!,
+      url: q.url!,
+      publishedAt: q.publishedAt!,
+      question: q.question!,
+      choices: q.choices as string[],
+      answerIndex: q.answerIndex!,
+      rationale: q.rationale!,
+      difficulty: q.difficulty!,
+      content: q.content!,
     }))
+    // 新しい順にソート
     .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
 
   return quizzes
