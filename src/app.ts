@@ -12,22 +12,24 @@ const app = Fastify()
 // CORS
 app.register(cors)
 
-// Swagger
-app.register(swagger, {
-  swagger: {
-    info: {
-      title: 'Techscope API',
-      description: '技術ニュース × AIクイズ API',
-      version: '1.0.0',
+if (process.env.ENABLE_SWAGGER === 'true') {
+  // Swagger
+  app.register(swagger, {
+    swagger: {
+      info: {
+        title: 'Techscope API',
+        description: '技術ニュース × AIクイズ API',
+        version: '1.0.0',
+      },
     },
-  },
-})
-app.register(swaggerUi, {
-  routePrefix: '/docs',
-  uiConfig: {
-    docExpansion: 'list',
-  },
-})
+  })
+  app.register(swaggerUi, {
+    routePrefix: '/docs',
+    uiConfig: {
+      docExpansion: 'list',
+    },
+  })
+}
 
 // Routes
 app.register(newsRoutes, { prefix: '/news' })

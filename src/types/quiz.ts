@@ -1,5 +1,5 @@
-// types/quiz.ts
-export interface Quiz {
+// src/types/quiz.ts
+export type Quiz = {
   id: string
   title: string
   url: string

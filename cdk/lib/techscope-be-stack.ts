@@ -27,6 +27,8 @@ export class TechscopeBeStack extends cdk.Stack {
       entry: path.join(__dirname, '../../src/lambda/lambda.ts'),
       handler: 'handler',
       runtime: cdk.aws_lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 256,
       environment: {
         TABLE_NAME: techscopeTable.tableName,
       },
