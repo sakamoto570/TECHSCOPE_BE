@@ -6,6 +6,8 @@ export const quizItemSchema = {
     title: { type: 'string' },
     url: { type: 'string' },
     publishedAt: { type: 'string' },
+    source: { type: 'string' },
+    newsId: { type: 'string' },
     question: { type: 'string' },
     choices: {
       type: 'array',

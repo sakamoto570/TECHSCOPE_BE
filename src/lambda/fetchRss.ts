@@ -293,6 +293,11 @@ export const handler = async () => {
             Item: {
               PK: { S: `QUIZ#${id}` },
               SK: { S: 'Q#1' },
+
+              // GSI: 最新クイズ50件取得用
+              GSI1PK: { S: 'QUIZ' },
+              GSI1SK: { S: publishedAt },
+
               question: { S: quiz.question },
               choices: { S: JSON.stringify(quiz.choices) },
               answerIndex: { N: quiz.answerIndex.toString() },
@@ -303,6 +308,7 @@ export const handler = async () => {
               source: { S: sourceType },
               newsId: { S: id },
               createdAt: { S: new Date().toISOString() },
+              publishedAt: { S: publishedAt },
             },
           })
         )

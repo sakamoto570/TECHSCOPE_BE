@@ -1,13 +1,14 @@
-// src/types/quiz.ts
 export type Quiz = {
   id: string
-  title: string
-  url: string
-  publishedAt: string
   question: string
   choices: string[]
   answerIndex: number
   rationale: string
   difficulty: string
   content: string
+  title: string
+  url: string
+  publishedAt: string
+  source?: string
+  newsId?: string
 }

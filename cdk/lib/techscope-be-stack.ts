@@ -22,6 +22,20 @@ export class TechscopeBeStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     })
 
+    // クイズを publishedAt の新しい順で取得するためのGSI
+    techscopeTable.addGlobalSecondaryIndex({
+      indexName: 'GSI1',
+      partitionKey: {
+        name: 'GSI1PK',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'GSI1SK',
+        type: dynamodb.AttributeType.STRING,
+      },
+      projectionType: dynamodb.ProjectionType.ALL,
+    })
+
     // Lambda
     const backendLambda = new lambdaNodejs.NodejsFunction(this, 'BackendLambda', {
       entry: path.join(__dirname, '../../src/lambda/lambda.ts'),
