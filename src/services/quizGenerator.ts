@@ -20,9 +20,10 @@ type Quiz = {
   difficulty: 'easy' | 'normal' | 'hard'
 }
 
-const bannedChoicePattern = /(上記|すべて|全て|全部|いずれも|all of the above|none of the above)/i
+// 「上記」単体だと誤爆しやすいので少し絞る
+const bannedChoicePattern =
+  /(上記すべて|上記のすべて|上記全て|すべて正しい|全て正しい|全部正しい|すべて当てはまる|全て当てはまる|いずれも正しい|どれも正しい|all of the above|none of the above)/i
 
-// Retry with exponential backoff (Bedrock API用)
 async function invokeWithRetry(command: InvokeModelCommand, maxRetries = 3) {
   for (let i = 0; i < maxRetries; i++) {
     try {
@@ -32,7 +33,7 @@ async function invokeWithRetry(command: InvokeModelCommand, maxRetries = 3) {
       const isLastTry = i === maxRetries - 1
 
       if (!isThrottling || isLastTry) {
-        console.error(`❌ Bedrock invoke failed:`, error)
+        console.error('❌ Bedrock invoke failed:', error)
         throw error
       }
 
@@ -41,51 +42,87 @@ async function invokeWithRetry(command: InvokeModelCommand, maxRetries = 3) {
       await new Promise((resolve) => setTimeout(resolve, delay))
     }
   }
+
+  throw new Error('Bedrock invoke failed unexpectedly')
 }
 
-// 文字列からJSON部分だけ抜き出す
 function extractJson(text: string): string {
   const start = text.indexOf('{')
   const end = text.lastIndexOf('}')
+
   if (start === -1 || end === -1 || end <= start) {
     throw new Error('No JSON object found in model output')
   }
+
   return text.slice(start, end + 1)
 }
 
-// クイズのバリデーション
 function validateQuiz(quiz: any): Quiz {
-  if (typeof quiz.question !== 'string') throw new Error('Invalid question')
+  if (typeof quiz.question !== 'string' || quiz.question.trim().length === 0) {
+    throw new Error('Invalid question')
+  }
+
   if (!Array.isArray(quiz.choices) || quiz.choices.length !== 4) {
     throw new Error('Invalid choices length')
   }
-  if (typeof quiz.answerIndex !== 'number' || quiz.answerIndex < 0 || quiz.answerIndex > 3) {
+
+  for (const choice of quiz.choices) {
+    if (typeof choice !== 'string' || choice.trim().length === 0) {
+      throw new Error('Invalid choice')
+    }
+
+    if (bannedChoicePattern.test(choice)) {
+      throw new Error(`Banned choice detected: ${choice}`)
+    }
+  }
+
+  const uniqueChoices = new Set(quiz.choices.map((c: string) => c.trim()))
+  if (uniqueChoices.size !== 4) {
+    throw new Error('Duplicate choices detected')
+  }
+
+  if (
+    typeof quiz.answerIndex !== 'number' ||
+    !Number.isInteger(quiz.answerIndex) ||
+    quiz.answerIndex < 0 ||
+    quiz.answerIndex > 3
+  ) {
     throw new Error('Invalid answerIndex')
   }
-  if (typeof quiz.rationale !== 'string') throw new Error('Invalid rationale')
+
+  if (typeof quiz.rationale !== 'string' || quiz.rationale.trim().length === 0) {
+    throw new Error('Invalid rationale')
+  }
+
   if (!['easy', 'normal', 'hard'].includes(quiz.difficulty)) {
     throw new Error('Invalid difficulty')
   }
 
-  const hasBanned = quiz.choices.some((c: string) => bannedChoicePattern.test(c))
-  if (hasBanned) {
-    throw new Error('Banned choice detected')
+  return {
+    question: quiz.question.trim(),
+    choices: quiz.choices.map((c: string) => c.trim()),
+    answerIndex: quiz.answerIndex,
+    rationale: quiz.rationale.trim(),
+    difficulty: quiz.difficulty,
   }
-
-  return quiz as Quiz
 }
 
-function buildPrompt(article: ArticleInput): string {
+function buildPrompt(article: ArticleInput, retryInstruction = ''): string {
   const { title, url, articleText, mode } = article
 
   const baseInstruction = `
-あなたは技術記事の内容に基づいてクイズを作成するAIです。
+あなたは技術記事の内容に基づいて、日本語の4択クイズを作成するAIです。
+記事が英語の場合でも、出題・選択肢・解説はすべて自然な日本語で作成してください。
+
 以下に記事の本文があります。本文に書かれている内容のみを使って、4択クイズを1問だけ作成してください。
 
 【厳守ルール】
-- 正解は必ず1つだけにしてください（複数正解は禁止）
-- 「上記すべて」「すべて当てはまる」「すべて正しい」「AとBの両方」などの選択肢は絶対に使用しないでください
-- 複数の理由・要因・目的が本文に並列で書かれている場合、「理由は何か？」のような設問形式は禁止します
+- 出力は必ず日本語にしてください
+- 正解は必ず1つだけにしてください
+- 選択肢は必ず4つにしてください
+- 「上記すべて」「すべて正しい」「すべて当てはまる」「AとBの両方」「該当なし」系の選択肢は禁止です
+- choices の各要素は、単独で意味が通る具体的な選択肢にしてください
+- 複数の理由・要因・目的が本文に並列で書かれている場合、「理由は何か？」のような設問は禁止します
 - 設問は、本文中の単一の記述から一意に正解が確定するものにしてください
 - 記事に書かれていない内容、推測、一般論は禁止です
 - 正解の根拠は本文の記述に基づいて説明してください
@@ -99,7 +136,7 @@ function buildPrompt(article: ArticleInput): string {
 
 【追加ルール】
 - 「理由」「目的」「背景」を問う設問を作る場合は、本文中で単一の理由だけが明確に述べられている場合に限ります
-- 複数の理由が列挙されている場合は、以下の形式を使ってください：
+- 複数の理由が列挙されている場合は、以下のような事実確認型の設問にしてください：
   ・特定の技術名
   ・ツール名
   ・アーキテクチャ
@@ -107,9 +144,10 @@ function buildPrompt(article: ArticleInput): string {
   ・時期
   ・手法
   ・用語の定義
+  ・追加された機能
 `
       : `
-この記事の本文は一部のみであり、完全な全文ではない可能性があります（mode=snippet）。
+この記事の本文は一部のみであり、完全な全文ではない可能性があります。
 
 【追加ルール】
 - 本文に明確に書かれている事実だけを使用してください
@@ -120,7 +158,10 @@ function buildPrompt(article: ArticleInput): string {
 
   return `
 ${baseInstruction}
+
 ${modeInstruction}
+
+${retryInstruction}
 
 記事タイトル: ${title}
 記事URL: ${url}
@@ -129,15 +170,57 @@ ${modeInstruction}
 ${articleText}
 </article>
 
-出力は 次のJSON形式のみ とし、余計な文章は一切出力しないでください。
+出力は次のJSON形式のみとし、余計な文章は一切出力しないでください。
 
 {
   "question": "...",
   "choices": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
   "answerIndex": 0,
-  "rationale": "なぜその回答が正しいのか（本文のどの記述が根拠かを説明）",
-  "difficulty": "easy | normal | hard"
+  "rationale": "なぜその回答が正しいのかを、本文の記述に基づいて説明してください",
+  "difficulty": "easy"
 }
+`
+}
+
+function buildRetryInstruction(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+
+  if (message.includes('Banned choice detected')) {
+    return `
+【前回の失敗理由】
+choices に禁止された選択肢が含まれていました。
+
+【再生成ルール】
+- 「上記すべて」「すべて正しい」「すべて当てはまる」「該当なし」に類する選択肢を絶対に使わないでください
+- 4つの選択肢は、すべて具体的な技術名・機能名・仕様・数値・用語にしてください
+- 正解以外の3つも、本文内容と混同しうる自然な誤答にしてください
+`
+  }
+
+  if (message.includes('Duplicate choices')) {
+    return `
+【前回の失敗理由】
+choices に重複した選択肢が含まれていました。
+
+【再生成ルール】
+- 4つの選択肢はすべて異なる内容にしてください
+- 言い換えただけの実質同じ選択肢も禁止です
+`
+  }
+
+  if (message.includes('Invalid choices length')) {
+    return `
+【前回の失敗理由】
+choices の数が4つではありませんでした。
+
+【再生成ルール】
+- choices は必ず4要素の配列にしてください
+`
+  }
+
+  return `
+【前回の出力はバリデーションに失敗しました】
+JSON形式、選択肢数、answerIndex、difficulty を厳密に守って再生成してください。
 `
 }
 
@@ -161,10 +244,6 @@ async function callModel(prompt: string): Promise<string> {
 
   const response = await invokeWithRetry(command)
 
-  if (!response) {
-    throw new Error('Bedrock response is undefined')
-  }
-
   const decoded = JSON.parse(new TextDecoder().decode(response.body))
   return decoded?.content?.[0]?.text ?? ''
 }
@@ -173,13 +252,17 @@ export async function generateQuizFromArticle(
   article: ArticleInput,
   maxAttempts = 3
 ): Promise<Quiz> {
-  const prompt = buildPrompt(article)
-
-  let lastError: any = null
+  let lastError: unknown = null
+  let retryInstruction = ''
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let rawText = ''
+
     try {
-      const rawText = await callModel(prompt)
+      const prompt = buildPrompt(article, retryInstruction)
+
+      rawText = await callModel(prompt)
+
       const jsonText = extractJson(rawText)
       const parsed = JSON.parse(jsonText)
       const quiz = validateQuiz(parsed)
@@ -187,7 +270,14 @@ export async function generateQuizFromArticle(
       return quiz
     } catch (err) {
       lastError = err
+
       console.warn(`⚠️ Quiz generation failed (attempt ${attempt}/${maxAttempts}):`, err)
+
+      if (rawText) {
+        console.warn('⚠️ LLM raw output on failure:', rawText.slice(0, 2000))
+      }
+
+      retryInstruction = buildRetryInstruction(err)
     }
   }
 
