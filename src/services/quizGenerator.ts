@@ -5,6 +5,8 @@ const bedrock = new BedrockRuntimeClient({
   region: 'ap-northeast-1',
 })
 
+const QUIZ_MODEL_ID = 'anthropic.claude-haiku-4-5-20251001-v1:0'
+
 type ArticleInput = {
   title: string
   url: string
@@ -226,7 +228,7 @@ JSON形式、選択肢数、answerIndex、difficulty を厳密に守って再生
 
 async function callModel(prompt: string): Promise<string> {
   const command = new InvokeModelCommand({
-    modelId: 'anthropic.claude-3-haiku-20240307-v1:0',
+    modelId: QUIZ_MODEL_ID,
     contentType: 'application/json',
     accept: 'application/json',
     body: JSON.stringify({
